@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ETA Reliability Lab</title>
+<style>
+:root{--ink:#172d36;--muted:#4d626b;--line:#cbd9db;--bg:#eef5f6;--accent:#076962;--blue:#347b96;--warn:#ac4b2a}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}header,main,footer{max-width:1160px;margin:auto;padding:22px clamp(16px,4vw,44px)}header,footer{display:flex;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line)}footer{border-bottom:0;border-top:1px solid var(--line);color:var(--muted)}a{color:var(--accent)}.hero{max-width:840px;padding:42px 0 20px}.hero h1{font-size:clamp(39px,7vw,70px);line-height:1.04;letter-spacing:-.055em;margin:12px 0 18px}.hero p{font-size:1.16rem}.muted,.hero p{color:var(--muted)}.tag{letter-spacing:.1em;color:var(--accent);font-size:.84rem}.panel{background:#fff;border:1px solid var(--line);padding:clamp(13px,3vw,25px);margin:20px 0}h2{margin-top:0}.controls{display:flex;flex-wrap:wrap;gap:16px}select,button{font:inherit;color:var(--ink);background:#f6fafb;border:1px solid #7897a2;border-radius:4px;padding:.45rem .65rem}.controls select{display:block;margin-top:6px}button{cursor:pointer;margin-top:14px}a:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.lead{color:var(--accent);font-weight:600}.scroll{overflow:auto}table{border-collapse:collapse;width:100%;white-space:nowrap;text-align:left}th,td{padding:.57rem .7rem;border-bottom:1px solid var(--line)}thead th{font-weight:500;color:var(--muted)}tr.active{background:#e9f5f2}.interval{position:relative;height:22px;background:#eaf1f3;min-width:170px}.interval i{position:absolute;top:8px;height:6px;background:var(--blue)}.interval b{position:absolute;top:5px;border-radius:50%;width:12px;height:12px;transform:translateX(-50%);background:var(--accent)}.interval b.miss{background:var(--warn)}.method{max-width:780px;margin:34px 0}
+</style></head><body><header><strong>ETA Reliability Lab</strong><a href="https://github.com/Ehsan-Ch/eta-reliability-lab">GitHub</a></header>
+<main><section class="hero"><div class="tag">SYNTHETIC SHIPPING BENCHMARK</div><h1>How reliable is an arrival window?</h1><p>Compare estimated arrival windows across voyage distances. Switch to a disruption scenario to see how a calibration based on ordinary conditions holds up.</p></section>
+<section class="panel"><h2>Compare coverage and interval width</h2><div class="controls">
+<label>Test conditions<select id="profile"><option value="reference">Reference conditions</option><option value="stress">Worse currents and queues</option></select></label>
+<label>Voyage distance<select id="group"><option value="all">All distances</option><option value="short">Short · under 175 nm</option><option value="medium">Medium · 175–374 nm</option><option value="long">Long · 375 nm and up</option></select></label>
+<label>Calibration target<select id="level"><option value="80">80%</option><option value="90" selected>90%</option><option value="95">95%</option></select></label></div>
+<p id="headline" class="lead" aria-live="polite"></p><p id="point" class="muted"></p><div class="scroll" tabindex="0"><table aria-label="Arrival window comparison"><thead><tr><th>Method</th><th>Observed coverage</th><th>Voyages covered</th><th>Mean width (h)</th></tr></thead><tbody id="methods"></tbody></table></div>
+<p class="muted">All intervals use the same corrected point forecast. The fixed window always uses ±2 hours. Calibrated windows use the selected target.</p></section>
+<section class="panel"><h2>Inspect example voyages</h2><div class="controls"><label>Window method<select id="method"><option value="fixed">Fixed window</option><option value="pooled">Pooled calibration</option><option value="grouped" selected>Distance-group calibration</option></select></label></div>
+<p class="muted">Bars mark predicted windows and dots mark actual arrival. Orange dots fall outside the window. Each row uses the same width scale within this selection. Hours are measured from the prediction time.</p>
+<div class="scroll" tabindex="0"><table aria-label="Example arrival forecasts"><thead><tr><th>ID</th><th>Distance (nm)</th><th>Point ETA (h)</th><th>Window (h)</th><th>Actual (h)</th><th>Window and actual</th><th>Outcome</th></tr></thead><tbody id="examples"></tbody></table></div>
+<button type="button" id="download">Download example forecasts CSV</button></section>
+<section class="method"><h2>How the benchmark works</h2><p>The point forecast starts with distance divided by planned speed and adds a correction learned from 1,800 voyages. An independent set of 900 voyages sets the interval radius from the absolute errors, either across all voyages or within each distance group.</p><p>Reference and stress results use independent sets of 1,200 synthetic voyages each. Stress adds slowdown and waiting after calibration. Observed coverage is the share of actual arrival times inside the predicted windows.</p><p>The interval method assumes calibration and future cases are exchangeable. The disrupted scenario changes that distribution. <a href="https://arxiv.org/abs/2107.07511">Split conformal prediction reference</a></p></section>
+</main><footer><span>ETA Reliability Lab</span><span>Forecast calibration study</span></footer>
+<script type="application/json" id="data"><!-- REPORT --></script>
+<script>
+const report=JSON.parse(document.getElementById('data').textContent);
+const get=id=>document.getElementById(id);
+const names={fixed:'Fixed ±2 hours',pooled:'Pooled calibration',grouped:'Distance-group calibration'};
+const fmt=value=>value.toFixed(2);
+const coverage=m=>(100*m.covered/m.count).toFixed(1)+'%';
+function current(){
+  return report.levels[get('level').value].profiles[get('profile').value][get('group').value];
+}
+function update(){
+  const data=current(), method=get('method').value;
+  const score=data.metrics[method];
+  get('headline').textContent=names[method]+' covers '+coverage(score)+' of '+score.count+' voyages in this selection.';
+  get('point').textContent='Point ETA mean absolute error: '+fmt(data.mae_raw)+' h for the schedule and '+fmt(data.mae_corrected)+' h after the learned correction.';
+  get('methods').innerHTML=Object.entries(data.metrics).map(([k,m])=>'<tr class="'+(k===method?'active':'')+'"><th scope="row">'+names[k]+'</th><td>'+coverage(m)+'</td><td>'+m.covered+' / '+m.count+'</td><td>'+fmt(m.width)+'</td></tr>').join('');
+  const max=Math.max(...data.examples.map(e=>Math.max(e.observed,e.intervals[method].upper)))*1.05;
+  get('examples').innerHTML=data.examples.map(e=>{
+    const i=e.intervals[method];
+    const bar='<div class="interval" aria-hidden="true"><i style="left:'+100*i.lower/max+'%;width:'+100*(i.upper-i.lower)/max+'%"></i><b class="'+(i.covered?'':'miss')+'" style="left:'+100*e.observed/max+'%"></b></div>';
+    return '<tr><th scope="row">'+e.id+'</th><td>'+e.distance+'</td><td>'+fmt(e.point)+'</td><td>'+fmt(i.lower)+'–'+fmt(i.upper)+'</td><td>'+fmt(e.observed)+'</td><td>'+bar+'</td><td>'+(i.covered?'Inside':'Outside')+'</td></tr>';
+  }).join('');
+}
+for(const id of ['profile','group','level','method'])get(id).onchange=update;
+get('download').onclick=()=>{
+  const lines=['conditions,distance_group,target_pct,voyage_id,distance_nm,point_eta_h,actual_eta_h,method,lower_h,upper_h,covered'];
+  for(const e of current().examples)for(const [method,i] of Object.entries(e.intervals)){
+    lines.push([get('profile').value,get('group').value,get('level').value,e.id,e.distance,e.point,e.observed,method,i.lower,i.upper,i.covered].join(','));
+  }
+  const url=URL.createObjectURL(new Blob([lines.join('\n')+'\n'],{type:'text/csv'}));
+  const link=document.createElement('a');link.href=url;link.download='eta-example-forecasts.csv';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+update();
+</script></body></html>
